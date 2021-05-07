@@ -1,0 +1,3 @@
+addpath('F:\radar\shijieModuleConnector\ModuleConnector-win32_win64-1.4.2\matlab\'); 
+addpath('F:\radar\shijieModuleConnector\ModuleConnector-win32_win64-1.4.2\lib');
+addpath('F:\radar\shijieModuleConnector\ModuleConnector-win32_win64-1.4.2\include') 

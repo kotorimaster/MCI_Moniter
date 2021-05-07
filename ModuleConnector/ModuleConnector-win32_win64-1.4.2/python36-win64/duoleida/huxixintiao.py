@@ -1,0 +1,1 @@
+from mlab.releases import get_latest_release
