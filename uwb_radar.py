@@ -1,5 +1,4 @@
 # created by Xikang Jiang
-from pymoduleconnector import create_mc
 from pymoduleconnector import ModuleConnector
 import logging
 import numpy as np
@@ -8,6 +7,7 @@ from VMDHRBR import VMDHRBR
 import pca_filter
 import threading
 from time import sleep
+import time
 
 
 class uwb_radar:
@@ -16,21 +16,12 @@ class uwb_radar:
     xep = None
     can_read = False
     read_condition = None
-    logger = None
     end = False
     list_length = 0
     range = [0, 0]
-    # count = 0
 
-    # logger = logging.getLogger('radar_camera_demo')
-    # logger.setLevel(logging.INFO)
-    # rf_handler = logging.StreamHandler(sys.stderr)  # 默认是sys.stderr
-    # rf_handler.setLevel(logging.DEBUG)
-    # rf_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(message)s"))
-    # logger.addHandler(rf_handler)
-
-    def __init__(self, com, logger, range):
-        self.range = range
+    def __init__(self, com, kwargs):
+        self.range = kwargs['set_frame_area']
         self.mc = ModuleConnector(com, log_level=0)
         self.xep = self.mc.get_xep()
         # xep = moduleconnector('')
@@ -39,45 +30,44 @@ class uwb_radar:
         self.xep.x4driver_init()
 
         # Set enable pin
-        self.xep.x4driver_set_enable(1)
+        self.xep.x4driver_set_enable(kwargs['set_enable'])
 
         # Set iterations
-        self.xep.x4driver_set_iterations(64)
+        self.xep.x4driver_set_iterations(kwargs['set_iterations'])
         # Set pulses per step
-        self.xep.x4driver_set_pulses_per_step(5)
+        self.xep.x4driver_set_pulses_per_step(kwargs['set_pulses_per_step'])
         # Set dac step
-        self.xep.x4driver_set_dac_step(1)
+        self.xep.x4driver_set_dac_step(kwargs['set_dac_step'])
         # Set dac min
-        self.xep.x4driver_set_dac_min(949)
+        self.xep.x4driver_set_dac_min(kwargs['set_dac_min'])
         # Set dac max
-        self.xep.x4driver_set_dac_max(1100)
+        self.xep.x4driver_set_dac_max(kwargs['set_dac_max'])
         # Set TX power
-        self.xep.x4driver_set_tx_power(2)
+        self.xep.x4driver_set_tx_power(kwargs['set_tx_power'])
 
         # Enable downconversion
-        self.xep.x4driver_set_downconversion(0)
+        self.xep.x4driver_set_downconversion(kwargs['set_downconversion'])
 
         # Set frame area offset
-        self.xep.x4driver_set_frame_area_offset(0.18)
+        self.xep.x4driver_set_frame_area_offset(kwargs['set_frame_area_offset'])
         offset = self.xep.x4driver_get_frame_area_offset()
 
         # Set frame area
-        self.xep.x4driver_set_frame_area(range[0], range[1])
+        self.xep.x4driver_set_frame_area(self.range[0], self.range[1])
         frame_area = self.xep.x4driver_get_frame_area()
 
         # Set TX center freq
-        self.xep.x4driver_set_tx_center_frequency(3)
+        self.xep.x4driver_set_tx_center_frequency(kwargs['set_tx_center_frequency'])
 
         # Set PRFdiv
-        self.xep.x4driver_set_prf_div(16)
+        self.xep.x4driver_set_prf_div(kwargs['set_prf_div'])
         prf_div = self.xep.x4driver_get_prf_div()
 
         # Start streaming
-        self.xep.x4driver_set_fps(20)
+        self.xep.x4driver_set_fps(kwargs['set_fps'])
         fps = self.xep.x4driver_get_fps()
 
-        self.logger = logger
-        self.logger.info("wait radar")
+        print("wait radar")
         self.read_condition = threading.Condition()
 
         self.list_length = len(self.read_frame())
@@ -88,6 +78,8 @@ class uwb_radar:
         self.preprocess = threading.Thread(
             name='preprocess', target=self.preprocessing, args=())
         # preprocess.setDaemon(True)
+        self.read_frame_circulation.setDaemon(True)
+        self.preprocess.setDaemon(True)
         self.read_frame_circulation.start()
         self.preprocess.start()
 
@@ -98,7 +90,7 @@ class uwb_radar:
         M = 20
         L = 50
         # global leiji, pure_data
-        self.logger.info('ready')
+        print('ready')
         while not self.end:
             sleep(0.001)
             if True:
@@ -106,7 +98,7 @@ class uwb_radar:
                 # print(self.leiji.shape[0])
                 if self.leiji is not None and self.leiji.shape[0] > 240:
                     if ycl == 1:
-                        self.logger.info('init')
+                        print('init')
                     self.leiji = self.leiji[-221:-1, :]
                     leijitmp = self.leiji[-221:-1, :].copy()
                     rawdata = leijitmp[-221:-1, :-3].copy()
@@ -122,6 +114,7 @@ class uwb_radar:
             if True:
             # with self.read_condition:
                 # print(hex(self.xep.ping()))
+                # start = time.time()
                 save = self.get_data()
                 if self.leiji is None:
                     self.leiji = save.copy()
@@ -130,6 +123,7 @@ class uwb_radar:
                     self.leiji = np.vstack((self.leiji, save))
                 # print('Read frame')
                 # self.read_condition.notify()
+                # print(time.time() - start)
             sleep(0.001)
 
     def read_frame(self):
@@ -144,6 +138,7 @@ class uwb_radar:
         # print(len(self.read_frame()))
 
         for jj in range(1):
+            
             frame2 = self.read_frame()
 
             save1[jj, :] = frame2
@@ -198,19 +193,37 @@ class uwb_radar:
         self.xep.module_reset()
 
 
+    def __del__(self):
+        if self.end != True:
+            self.end = True
+            self.xep.module_reset()
+            if hasattr(self, 'read_frame_circulation'):
+                if self.read_frame_circulation.is_alive():
+                    self.read_frame_circulation.join()
+            if hasattr(self, 'preprocess'):
+                if self.preprocess.is_alive():
+                    self.preprocess.join()
+
+
 if __name__ == '__main__':
-    # global logger
-    logger = logging.getLogger('radar_camera_demo')
-    logger.setLevel(logging.INFO)
-    rf_handler = logging.StreamHandler(sys.stderr)  # 默认是sys.stderr
-    rf_handler.setLevel(logging.DEBUG)
-    rf_handler.setFormatter(logging.Formatter(
-        "%(asctime)s - %(name)s - %(message)s"))
-    logger.addHandler(rf_handler)
-    uwb = uwb_radar('COM3', logger, [0.2, 4])
+    args = {
+        'set_enable':1,
+        'set_iterations':64,
+        'set_pulses_per_step':5,
+        'set_dac_step':1,
+        'set_dac_min':949,
+        'set_dac_max':1100,
+        'set_tx_power':2,
+        'set_downconversion':0,
+        'set_frame_area_offset':0.18,
+        'set_frame_area':[0.2, 4],
+        'set_tx_center_frequency':3,
+        'set_prf_div':16,
+        'set_fps':20}
+    uwb = uwb_radar('COM11', args)
     # print('Start reading')
     i = 0
-    while i<40:
+    while i < 25:
         # if uwb.PureData.shape[0] > 1 and uwb.can_read:
         #     if result[tag]['state'] and (result[tag]['endindex'] != result[tag]['beginindex']) :
         #         PureData3 = uwb.PureData[:, result[tag]['beginindex']:result[tag]['endindex']].copy()
