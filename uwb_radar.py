@@ -24,10 +24,10 @@ class uwb_radar:
         self.range = kwargs['set_frame_area']
         self.mc = ModuleConnector(com, log_level=0)
         self.xep = self.mc.get_xep()
-        # xep = moduleconnector('')
 
         # inti x4driver
         self.xep.x4driver_init()
+        # print('initing')
 
         # Set enable pin
         self.xep.x4driver_set_enable(kwargs['set_enable'])
@@ -194,15 +194,18 @@ class uwb_radar:
 
 
     def __del__(self):
+        print('destruction')
         if self.end != True:
             self.end = True
-            self.xep.module_reset()
+            
             if hasattr(self, 'read_frame_circulation'):
                 if self.read_frame_circulation.is_alive():
                     self.read_frame_circulation.join()
             if hasattr(self, 'preprocess'):
                 if self.preprocess.is_alive():
                     self.preprocess.join()
+            
+            self.xep.module_reset()
 
 
 if __name__ == '__main__':
@@ -220,10 +223,10 @@ if __name__ == '__main__':
         'set_tx_center_frequency':3,
         'set_prf_div':16,
         'set_fps':20}
-    uwb = uwb_radar('COM11', args)
+    uwb = uwb_radar('COM3', args)
     # print('Start reading')
     i = 0
-    while i < 25:
+    while i < 200:
         # if uwb.PureData.shape[0] > 1 and uwb.can_read:
         #     if result[tag]['state'] and (result[tag]['endindex'] != result[tag]['beginindex']) :
         #         PureData3 = uwb.PureData[:, result[tag]['beginindex']:result[tag]['endindex']].copy()
@@ -233,10 +236,12 @@ if __name__ == '__main__':
         #         # result[tag]['heartbeat']=tmp_vs[0] if tmp_vs[0] != -1 else None
         #         # result[tag]['breath']=tmp_vs[1] if tmp_vs[1] != -1 else None
         # print(uwb.vital_signs(110, 130)
-        print(uwb.vital_signs(1.10, 1.30))
-        sleep(1)
+        hr = uwb.vital_signs(0.55, 0.65)[0]
+        if hr != -1:
+            print(hr)
+        sleep(0.1)
         i += 1
-        print(i + 1)
+        # print(i + 1)
         # print('ready')
         pass
     uwb.reset()
