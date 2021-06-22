@@ -6,6 +6,7 @@
 # xep.x4driver_init()
 # print(xep.x4driver_get_fps())
 # xep.module_reset()
+# test
 
 import threading
 import time
